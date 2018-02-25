@@ -1,4 +1,5 @@
 # !/usr/bin/env python3
+import socket
 from enum import IntEnum, unique
 import datetime as dt
 
@@ -21,6 +22,22 @@ class Mode(IntEnum):
     BROADCAST = 5
     NTP_CONTROL_RESERVED = 6
     PRIVATE_RESERVED = 7
+
+
+def send_udp_sntp_message(sntp_message, hostname, tries=4, timeout=2):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(timeout)
+    try_ = 0
+    while True:
+        sock.sendto(sntp_message, (hostname, 123))
+        try:
+            reply = sock.recv(1024)
+            return reply
+        except socket.timeout:
+            try_ += 1
+            if try_ > tries > 0:
+                raise TimeoutError("Out of tries")
+            print("Timeout has reached, trying again")
 
 
 def form_sntp_message(
