@@ -15,3 +15,7 @@ def get_time_from(hostname):
         sntp_util.parse_sntp_message(
             sntp_util.send_sntp_message_and_get_reply(form_client_request(), hostname))
     return transmit_ts
+
+
+if __name__ == '__main__':
+    print(str(get_time_from("time.windows.com")))

@@ -46,7 +46,7 @@ def send_udp_message_and_get_reply(message, port, hostname, tries=4,
             print("Timeout has reached, trying again")
 
 
-def form_sntp_message(
+def  form_sntp_message(
         li=LI.NO_WARNING,
         version=4,
         mode=0,
@@ -84,9 +84,9 @@ def form_sntp_message(
 
 
 def parse_sntp_message(bytes_: bytes):
-    leap_indicator = (bytes_[0] & 0b11000000) >> 6
+    leap_indicator = LI((bytes_[0] & 0b11000000) >> 6)
     version = (bytes_[0] & 0b00111000) >> 3
-    mode = (bytes_[0] & 0b00000111)
+    mode = Mode(bytes_[0] & 0b00000111)
     stratum = bytes_[1]
     poll = bytes_[2]
     precision = bytes_[3] if bytes_[3] <= 127 else -(256 - bytes_[3])

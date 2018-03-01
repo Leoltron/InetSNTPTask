@@ -13,7 +13,7 @@ def main():
 
     with open(CONFIG_FILE)as f:
         lie_seconds = int(f.readline())
-    SNTPLiarServer("10.96.19.61", lie_seconds).start()
+    SNTPLiarServer("localhost", lying_seconds=lie_seconds, port=12345).start()
 
 
 if __name__ == '__main__':
