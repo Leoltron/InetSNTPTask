@@ -13,5 +13,5 @@ def form_client_request(transmit_timestamp: datetime.datetime = None) -> bytes:
 def get_time_from(hostname):
     _, _, _, _, _, _, _, _, _, _, _, _, transmit_ts = \
         sntp_util.parse_sntp_message(
-            sntp_util.send_udp_sntp_message(form_client_request(), hostname))
+            sntp_util.send_sntp_message_and_get_reply(form_client_request(), hostname))
     return transmit_ts

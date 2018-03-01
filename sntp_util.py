@@ -24,12 +24,18 @@ class Mode(IntEnum):
     PRIVATE_RESERVED = 7
 
 
-def send_udp_sntp_message(sntp_message, hostname, tries=4, timeout=2):
+def send_sntp_message_and_get_reply(message, hostname, tries=4, timeout=2):
+    return send_udp_message_and_get_reply(message, 123, hostname, tries,
+                                          timeout)
+
+
+def send_udp_message_and_get_reply(message, port, hostname, tries=4,
+                                   timeout=2):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(timeout)
     try_ = 0
     while True:
-        sock.sendto(sntp_message, (hostname, 123))
+        sock.sendto(message, (hostname, port))
         try:
             reply = sock.recv(1024)
             return reply
