@@ -3,6 +3,10 @@ import socket
 from enum import IntEnum, unique
 import datetime as dt
 
+SNTP_MESSAGE_LENGTH = 48
+
+MIN_DATETIME = dt.datetime(1968, 1, 1)
+
 
 @unique
 class LI(IntEnum):
@@ -24,8 +28,64 @@ class Mode(IntEnum):
     PRIVATE_RESERVED = 7
 
 
-def send_sntp_message_and_get_reply(message, hostname, tries=4, timeout=2):
-    return send_udp_message_and_get_reply(message, 123, hostname, tries,
+class SNTPMessage:
+    def __init__(self,
+                 li=LI.NO_WARNING,
+                 version=4,
+                 mode=Mode.PRIVATE_RESERVED,
+                 stratum=255,
+                 poll=0,
+                 precision=-20,
+                 root_delay=0,
+                 root_dispersion=0,
+                 ref_id=b"\x00\x00\x00\x00",
+                 ref_ts: dt.datetime = None,
+                 orig_ts: dt.datetime = None,
+                 rcv_ts: dt.datetime = None,
+                 transmit_ts: dt.datetime = None
+                 ):
+        self.li = li
+        self.version = version
+        self.mode = mode
+        self.stratum = stratum
+        self.poll = poll
+        self.precision = precision
+        self.root_delay = root_delay
+        self.root_dispersion = root_dispersion
+        self.ref_id = ref_id
+        self.ref_ts = ref_ts
+        self.orig_ts = orig_ts
+        self.rcv_ts = rcv_ts
+        self.transmit_ts = transmit_ts
+
+    @staticmethod
+    def from_bytes(bytes_: bytes, expected_modes: list = list()):
+        return SNTPMessage(*_parse_sntp_message(bytes_=bytes_, expected_modes=expected_modes))
+
+    def to_bytes(self):
+        message = bytearray(48)  # 68)
+        message[0] = ((self.li & 0b11) << 6) | \
+                 ((self.version & 0b111) << 3) | \
+                 (self.mode & 0b111)
+        message[1] = self.stratum & 0xff
+        message[2] = self.poll & 0xff
+        message[3] = self.precision.to_bytes(1, "big", signed=True)[0]
+        message[4:4 + 4] = float_to_signed_fixed_bytes(
+            self.root_delay, 4, 16, signed=True)
+        message[8:8 + 4] = float_to_signed_fixed_bytes(
+            self.root_dispersion, 4, 16, signed=False)
+        message[12:12 + 4] = self.ref_id
+        message[16:16 + 8] = datetime_to_bytes(self.ref_ts)
+        message[24:24 + 8] = datetime_to_bytes(self.orig_ts)
+        message[32:32 + 8] = datetime_to_bytes(self.rcv_ts)
+        message[40:40 + 8] = datetime_to_bytes(self.transmit_ts)
+
+        return message
+
+
+
+def send_sntp_message_and_get_reply(message:SNTPMessage, hostname, tries=4, timeout=2):
+    return send_udp_message_and_get_reply(message.to_bytes(), 123, hostname, tries,
                                           timeout)
 
 
@@ -45,48 +105,16 @@ def send_udp_message_and_get_reply(message, port, hostname, tries=4,
                 raise TimeoutError("Out of tries")
             print("Timeout has reached, trying again")
 
-
-def  form_sntp_message(
-        li=LI.NO_WARNING,
-        version=4,
-        mode=0,
-        stratum=255,
-        poll=0,
-        precision=-20,
-        root_delay=0,
-        root_dispersion=0,
-        ref_id=b"\x00\x00\x00\x00",
-        ref_ts: dt.datetime = dt.datetime(1900, 1, 1),
-        orig_ts: dt.datetime = dt.datetime(1900, 1, 1),
-        rcv_ts: dt.datetime = dt.datetime(1900, 1, 1),
-        transmit_ts: dt.datetime = dt.datetime(1900, 1, 1)
-        # key_id=None,
-        # message_digset=None
-) -> bytes:
-    message = bytearray(48)  # 68)
-    message[0] = ((li & 0b11) << 6) | \
-                 ((version & 0b111) << 3) | \
-                 (mode & 0b111)
-    message[1] = stratum & 0xff
-    message[2] = poll & 0xff
-    message[3] = precision.to_bytes(1, "big", signed=True)[0]
-    message[4:4 + 4] = float_to_signed_fixed_bytes(
-        root_delay, 4, 16, signed=True)
-    message[8:8 + 4] = float_to_signed_fixed_bytes(
-        root_dispersion, 4, 16, signed=False)
-    message[12:12 + 4] = ref_id
-    message[16:16 + 8] = datetime_to_bytes(ref_ts)
-    message[24:24 + 8] = datetime_to_bytes(orig_ts)
-    message[32:32 + 8] = datetime_to_bytes(rcv_ts)
-    message[40:40 + 8] = datetime_to_bytes(transmit_ts)
-
-    return message
-
-
-def parse_sntp_message(bytes_: bytes):
+def _parse_sntp_message(bytes_: bytes, expected_modes: list = list()):
+    message_len = len(bytes_)
+    if message_len != SNTP_MESSAGE_LENGTH:
+        raise ValueError(
+            "Invalid message length: expected: {:d}, got: {:d}".format(SNTP_MESSAGE_LENGTH, message_len))
     leap_indicator = LI((bytes_[0] & 0b11000000) >> 6)
     version = (bytes_[0] & 0b00111000) >> 3
     mode = Mode(bytes_[0] & 0b00000111)
+    if mode not in expected_modes:
+        raise ValueError("Got an unexpected mode; expected: {}, got: {}".format(str(expected_modes), str(mode)))
     stratum = bytes_[1]
     poll = bytes_[2]
     precision = bytes_[3] if bytes_[3] <= 127 else -(256 - bytes_[3])
@@ -106,6 +134,7 @@ def parse_sntp_message(bytes_: bytes):
 
 def bytes_signed_fixed_to_float(b, fraction_start_bit, signed) -> float:
     length_bites = 8 * len(b)
+    negative = False
     if signed:
         negative = bool(b[0] & 0b10000000)
     result = 0
@@ -148,7 +177,9 @@ def float_to_signed_fixed_bytes(f, length, fraction_start_bit,
     return bytes(bytes_)
 
 
-initial_time = dt.datetime(year=1900, month=1, day=1)
+initial_time_1 = dt.datetime(year=1900, month=1, day=1)
+initial_time_0 = dt.datetime(year=2036, month=2, day=7,
+                             hour=6, minute=28, second=16)
 
 
 def datetime_from_bytes(bytes_: bytes) -> dt.datetime:
@@ -157,6 +188,7 @@ def datetime_from_bytes(bytes_: bytes) -> dt.datetime:
                                    signed=False) / (2 ** 32)
     milliseconds = int(sec_fractions * 1000)
     microseconds = (sec_fractions * 1000000) % 1000
+    initial_time = initial_time_1 if bytes_[0] & 0b10000000 else initial_time_0
     return initial_time + dt.timedelta(
         seconds=seconds,
         milliseconds=milliseconds,
@@ -164,14 +196,22 @@ def datetime_from_bytes(bytes_: bytes) -> dt.datetime:
 
 
 def datetime_to_bytes(datetime_: dt.datetime) -> bytes:
+    if datetime_ is None:
+        return b"\x00" * 8
+    if datetime_ < MIN_DATETIME:
+        raise ValueError("Cannot encode dates sooner than 1 January 1968")
+    use_2036_as_start = datetime_ >= initial_time_0
+    initial_time = initial_time_0 if use_2036_as_start else initial_time_1
     delta = datetime_ - initial_time
     delta_seconds = delta.total_seconds()
 
     seconds_int = int(delta_seconds)
+    if use_2036_as_start and seconds_int >= 0x80000000:
+        raise ValueError("Cannot encode dates that late")
     seconds_fraction = int((delta_seconds - seconds_int) * (2 ** 32))
 
-    return seconds_int.to_bytes(4, byteorder='big', signed=False) + \
-           seconds_fraction.to_bytes(4, byteorder='big', signed=False)
+    return (seconds_int.to_bytes(4, byteorder='big', signed=False) +
+            seconds_fraction.to_bytes(4, byteorder='big', signed=False))
 
 
 if __name__ == '__main__':

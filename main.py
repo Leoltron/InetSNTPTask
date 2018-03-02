@@ -13,8 +13,10 @@ def main():
 
     with open(CONFIG_FILE)as f:
         lie_seconds = int(f.readline())
-    SNTPLiarServer("localhost", lying_seconds=lie_seconds, port=12345).start()
-
+    try:
+        SNTPLiarServer("localhost", lying_seconds=lie_seconds, port=123).start()
+    except Exception as e:
+        print("An unexpected error occurred: "+str(e))
 
 if __name__ == '__main__':
     main()
