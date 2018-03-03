@@ -1,22 +1,22 @@
 # !/usr/bin/env python3
-import os
-from sntp_client import get_time_from
+import os.path
+
 from sntp_server import SNTPLiarServer
 
-CONFIG_FILE = "time_offset.txt"
 
-
-def main():
-    if not os.path.isfile(CONFIG_FILE):
-        print('Error: file "' + os.path.abspath(CONFIG_FILE) + '" not found.')
+def main(config_file):
+    if not os.path.isfile(config_file):
+        print('Error: file "' + os.path.abspath(config_file) + '" not found.')
         return
 
-    with open(CONFIG_FILE)as f:
-        lie_seconds = int(f.readline())
     try:
-        SNTPLiarServer("localhost", lying_seconds=lie_seconds, port=123).start()
+        with open(config_file)as f:
+            lie_seconds = int(f.readline())
+        SNTPLiarServer("localhost", lying_seconds=lie_seconds,
+                       port=123).start()
     except Exception as e:
-        print("An unexpected error occurred: "+str(e))
+        print("An unexpected error occurred: " + str(e))
+
 
 if __name__ == '__main__':
-    main()
+    main("time_offset.txt")
