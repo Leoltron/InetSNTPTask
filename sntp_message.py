@@ -3,7 +3,7 @@ import datetime as dt
 from enum import IntEnum, unique
 from typing import Union
 
-SNTP_MESSAGE_LENGTH = 48
+SNTP_MESSAGE_LENGTHS = [48,48+4,48+16,48+16+4]
 
 MIN_DATETIME = dt.datetime(1968, 1, 1)
 
@@ -65,10 +65,10 @@ class SNTPMessage:
     @staticmethod
     def from_bytes(bytes_: bytes, expected_modes: list = list()):
         message_length = len(bytes_)
-        if message_length != SNTP_MESSAGE_LENGTH:
+        if message_length not in SNTP_MESSAGE_LENGTHS:
             raise ValueError(
-                "Invalid message length: expected: {:d}, got: {:d}".format(
-                    SNTP_MESSAGE_LENGTH, message_length))
+                "Invalid message length: expected: {}, got: {:d}".format(
+                    str(SNTP_MESSAGE_LENGTHS), message_length))
 
         leap_indicator = LI((bytes_[0] & 0b11000000) >> 6)
         version = (bytes_[0] & 0b00111000) >> 3

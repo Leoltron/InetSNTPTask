@@ -37,6 +37,7 @@ class SNTPLiarServer:
         print("Received: message from " + str(address) + ": ", end='')
         try:
             receive_time = datetime.utcnow() + self._lying_timedelta
+            validaton = SNTPMessage.from_bytes(message, [Mode.CLIENT])
             answer = self.get_server_answer(receive_time, message[40:48])
             self.server_socket.sendto(answer, address)
         except ValueError as e:
